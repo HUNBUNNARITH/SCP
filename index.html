@@ -360,9 +360,9 @@ function update(fit) {
 
   const kpi = (v, l, s) => `<div class="kpi"><div class="kv">${v}</div><div class="kl">${l}</div><div class="ks">${s}</div></div>`;
   $("kpis").innerHTML =
-    kpi(fmt(d.length), "Producers", `${fmt(d.length / DATA.length * 100)}% of all records`) +
-    kpi(fmt(women), "Women producers", `${fmt(women / d.length * 100)}% of producers`) +
-    kpi(fmt(totalLand, 1), "Land under production (ha)", `from ${fmt(landRows.length)} producers with land recorded`) +
+    kpi(fmt(d.length), "Eco-Friendly Producers", `${fmt(d.length / DATA.length * 100)}% of all records`) +
+    kpi(fmt(women), "Sustainable Women producers", `${fmt(women / d.length * 100)}% of producers`) +
+    kpi(fmt(totalLand, 1), "Land under sustainable production (ha)", `from ${fmt(landRows.length)} producers with land recorded`) +
     kpi(fmt(villagesN), "Villages", `in ${fmt(communesN)} communes (excluding "${OTHER}")`);
 
   const cats = [...new Set(DATA.map(r => r.commodity))].sort();
