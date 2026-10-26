@@ -42,7 +42,7 @@ summary{padding:7px 10px;cursor:pointer;font-weight:600}
 .leg i,#legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
 #mapw{position:relative}
 #map{width:100%;height:600px;border-radius:6px;background:#eef2ee;z-index:0}
-#zoom{position:absolute;top:10px;right:10px;z-index:1000;display:flex;flex-direction:column;gap:4px}
+#zoom{position:absolute;top:10px;right:10px;z-index:1000}
 #zoom button{width:44px;padding:5px;background:#fff}
 #mapw.full{position:fixed;inset:0;z-index:5000;background:#fff}
 #mapw.full #map{height:100vh;border-radius:0}
@@ -96,7 +96,7 @@ summary{padding:7px 10px;cursor:pointer;font-weight:600}
         </div>
         <div class="card"><div class="ct">Where the Producers Are</div>
           <div id="mapw"><div id="map"></div>
-            <div id="zoom"><button id="zf" title="Fit to producers">&#9974;</button><button id="zfull" title="Full extent (all protected areas and producers)">All</button><button id="zscreen" title="Full page map (Esc to exit)">Full</button></div>v>
+            <div id="zoom"><button id="zf" title="Fit to producers">&#9974;</button><button id="zscreen" title="Full page map (Esc to exit)">Full</button></div>
             <div id="legend"></div></div>
           <div class="note" id="mapnote"></div></div>
         <div>
@@ -285,15 +285,6 @@ function fitMap() {
   if (polyLayer) polyLayer.eachLayer(l => { if (COUNTS.get(l.feature.properties.V_Name_E)) b.extend(l.getBounds()); });
   if (b.isValid()) map.fitBounds(b, {padding: [30, 30], maxZoom: 13});
 }
-
-function fullExtent() {
-  if (!map) return;
-  const b = L.latLngBounds([]);
-  DATA.filter(r => r.hasXY).forEach(r => b.extend([r.lat, r.lon]));    // all producers with GPS
-  if (PAGJ) b.extend(L.geoJSON(PAGJ).getBounds());                      // whole protected area layer
-  if (b.isValid()) map.fitBounds(b, {padding: [20, 20]});
-}
-
 function toggleFullscreen() {
   const on = $("mapw").classList.toggle("full");
   $("zscreen").textContent = on ? "Exit" : "Full";
@@ -452,7 +443,6 @@ function update(fit) {
 $("reset").onclick = resetAll;
 ["base", "showpoly", "showpa", "showpts"].forEach(id => $(id).onchange = () => update(false));
 $("zf").onclick = fitMap;
-$("zfull").onclick = fullExtent;
 $("zscreen").onclick = toggleFullscreen;
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("mapw").classList.contains("full")) toggleFullscreen(); });
 window.onresize = () => { if (map) map.invalidateSize(); };
