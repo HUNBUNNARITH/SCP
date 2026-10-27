@@ -74,9 +74,11 @@ summary{padding:7px 10px;cursor:pointer;font-weight:600}
     </select>
     <label class="chk"><input type="checkbox" id="showpoly" checked> Village polygons (count)</label>
     <label class="chk"><input type="checkbox" id="showpa" checked> Protected areas (SWS, PPWS)</label>
+    <label class="chk"><input type="checkbox" id="showcpa" checked> Community protected areas (CPA)</label>
     <label class="chk"><input type="checkbox" id="showpts" checked> GPS points</label>
     <div class="foot" id="bndmsg" style="margin-top:6px"></div>
     <div class="foot" id="pamsg" style="margin-top:6px"></div>
+    <div class="foot" id="cpamsg" style="margin-top:6px"></div>
   </div>
   <p class="foot" id="srcinfo"></p>
 </aside>
@@ -114,6 +116,7 @@ summary{padding:7px 10px;cursor:pointer;font-weight:600}
 const DATA_FILE = "Producers_WGS84_Final_clean.xlsx";
 const BOUNDARY_FILE = "Village_Boundary.geojson";
 const PA_FILE = "SWS and PPWS Shapefile_updated.geojson";      // protected area boundary
+const CPA_FILE = "CPA_boundary.geojson";                        // community protected area boundary
 const OTHER = "Other Villages";                        // villages with no polygon
 const FK = ["commodity", "commune", "sex", "status", "demo"];  // filter fields (add "ethnicity" here for an Ethnicity filter)
 const LBL = {commodity: "Commodity", commune: "Commune", sex: "Sex", status: "Status", ethnicity: "Ethnicity", demo: "Demo Farm"};
@@ -255,12 +258,13 @@ const BASES = {
   sat: {u: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", o: {maxZoom: 19, attribution: "Tiles &copy; Esri"}}
 };
 const FALLBACK = ["light", "sat", "osm"];
-let map = null, baseLayer = null, BASE_NOW = "", pts = null, polyLayer = null, paLayer = null, PAGJ = null, tileErr = 0, tried = new Set();
+let map = null, baseLayer = null, BASE_NOW = "", pts = null, polyLayer = null, paLayer = null, PAGJ = null, cpaLayer = null, CPAGJ = null, tileErr = 0, tried = new Set();
 
 function initMap() {
   map = L.map("map", {zoomSnap: 0.25}).setView([12.4, 107.2], 9);   // Mondulkiri
   map.createPane("poly").style.zIndex = 350;   // polygons below
   map.createPane("pa").style.zIndex = 400;     // protected area outline above the villages
+  map.createPane("cpa").style.zIndex = 420;    // CPA outline above the protected area, below the points
   map.createPane("pts").style.zIndex = 450;    // points above
   pts = L.layerGroup().addTo(map);
 }
@@ -297,6 +301,7 @@ function drawMap(fit) {
   map.invalidateSize(); setBase($("base").value);
   if (polyLayer) { map.removeLayer(polyLayer); polyLayer = null; }
   if (paLayer) { map.removeLayer(paLayer); paLayer = null; }
+  if (cpaLayer) { map.removeLayer(cpaLayer); cpaLayer = null; }
   pts.clearLayers();
 
   // Producers per village (all producers, with or without GPS)
@@ -323,6 +328,15 @@ function drawMap(fit) {
     }).addTo(map);
   }
 
+  // Community protected area (CPA) outline
+  if (CPAGJ && $("showcpa").checked) {
+    cpaLayer = L.geoJSON(CPAGJ, {
+      pane: "cpa",
+      style: {color: "#c0562b", weight: 2.5, dashArray: "3 5", fillColor: "#c0562b", fillOpacity: 0.08},
+      onEachFeature: (f, l) => { const n = paName(f.properties || {}); if (n) l.bindTooltip(`<b>${esc(n)}</b> (CPA)`, {sticky: true}); }
+    }).addTo(map);
+  }
+
   // GPS points: colour = commodity, size = land. Demo farms get a thick dark ring.
   const cats = [...new Set(DATA.map(r => r.commodity))].sort();
   const maxLand = Math.max(1, ...CUR.map(r => r.land).filter(isFinite));
@@ -342,6 +356,7 @@ function drawMap(fit) {
     .map(c => `<div><i style="background:${PAL[cats.indexOf(c) % 8]}"></i>${esc(c)}</div>`).join("");
   if (CUR.some(r => r.demo === "Demo farm")) h += `<div style="margin-top:4px"><i style="background:#fff;border:2px solid #26332b"></i>Demo farm (dark ring)</div>`;
   if (paLayer) h += `<div style="margin-top:4px"><span style="display:inline-block;width:18px;border-top:3px dashed #0b4f2c;vertical-align:middle;margin-right:5px"></span>Protected area</div>`;
+  if (cpaLayer) h += `<div style="margin-top:4px"><span style="display:inline-block;width:18px;border-top:3px dotted #c0562b;vertical-align:middle;margin-right:5px"></span>Community PA (CPA)</div>`;
   if (showPoly) h += `<div style="margin-top:6px"><b>Producers per village</b></div>
     <div style="height:8px;border-radius:4px;margin:4px 0;background:linear-gradient(90deg,${SCALE.join(",")})"></div>
     <div style="display:flex;justify-content:space-between"><span>1</span><span>${fmt(maxC)}</span></div>`;
@@ -371,7 +386,7 @@ function loadBoundary() {
 }
 
 /* ================= PROTECTED AREA OUTLINE (GeoJSON) ================= */
-const PA_NAME_KEYS = ["name", "pa_name", "pa", "name_e", "protected_area", "wdpa_name"];   // used for the hover name, if one is found
+const PA_NAME_KEYS = ["name", "pa_name", "pa", "name_e", "protected_area", "wdpa_name", "cpa_name", "cpa"];   // used for the hover name, if one is found
 function paName(p) { const k = Object.keys(p).find(x => PA_NAME_KEYS.includes(x.toLowerCase())); return k ? clean(p[k]) : ""; }
 function setPA(gj) {
   PAGJ = gj;
@@ -385,6 +400,23 @@ function loadPA() {
     $("pafile").onchange = e => { const f = e.target.files[0]; if (!f) return;
       const r = new FileReader();
       r.onload = () => { try { setPA(JSON.parse(r.result)); } catch (x) { $("pamsg").textContent = "Invalid GeoJSON file"; } };
+      r.readAsText(f); };
+  });
+}
+
+/* ================= COMMUNITY PROTECTED AREA (CPA) ================= */
+function setCPA(gj) {
+  CPAGJ = gj;
+  $("cpamsg").textContent = "CPA: " + (gj.features ? gj.features.length : 1) + " feature(s) loaded";
+  if (map && CUR.length) drawMap(false);
+}
+function loadCPA() {
+  fetch(encodeURI(CPA_FILE), {cache: "no-store"}).then(r => { if (!r.ok) throw 0; return r.json(); }).then(setCPA)
+  .catch(() => {
+    $("cpamsg").innerHTML = 'Could not read the CPA file automatically. Select it: <input type="file" id="cpafile" accept=".geojson,.json">';
+    $("cpafile").onchange = e => { const f = e.target.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { try { setCPA(JSON.parse(r.result)); } catch (x) { $("cpamsg").textContent = "Invalid GeoJSON file"; } };
       r.readAsText(f); };
   });
 }
@@ -442,12 +474,12 @@ function update(fit) {
 
 /* ================= EVENTS + START ================= */
 $("reset").onclick = resetAll;
-["base", "showpoly", "showpa", "showpts"].forEach(id => $(id).onchange = () => update(false));
+["base", "showpoly", "showpa", "showcpa", "showpts"].forEach(id => $(id).onchange = () => update(false));
 $("zf").onclick = fitMap;
 $("zscreen").onclick = toggleFullscreen;
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("mapw").classList.contains("full")) toggleFullscreen(); });
 window.onresize = () => { if (map) map.invalidateSize(); };
-update(false); load(); loadBoundary(); loadPA();
+update(false); load(); loadBoundary(); loadPA(); loadCPA();
 </script>
 </body>
 </html>
